@@ -44,22 +44,30 @@ def run_bench(array_size: int, num_trials: int = 3):
 def plot_results(timing_data, array_size):
     fig, ax = plt.subplots(1, 1)
     x_labels = list(timing_data["numpy"].keys())
+    width = 0.1
     x = np.arange(len(x_labels))
-    heights_numpy_avg = []
-    heights_numpy_std = []
-    for func_name in x_labels:
-        data = timing_data["numpy"][func_name]
-        heights_numpy_avg.append(np.average(timing_data["numpy"][func_name]))
-        heights_numpy_std.append(np.std(timing_data["numpy"][func_name]))
+
+    for libname, offset in [("numpy", 0.0),
+                            ("pykokkos", width)]:
+        avg_time = []
+        std_time = []
+        for func_name in x_labels:
+            data = timing_data[libname][func_name]
+            avg_time.append(np.average(data))
+            std_time.append(np.std(data))
+
+        ax.bar(x=x + offset,
+               height=avg_time,
+               tick_label=x_labels,
+               yerr=std_time,
+               capsize=20.0,
+               label=libname,
+               width=0.1,
+               )
 
     num_trials = len(data)
-    ax.bar(x=x,
-           height=heights_numpy_avg,
-           tick_label=x_labels,
-           yerr=heights_numpy_std,
-           capsize=20.0,
-           label="NumPy",
-           )
+    ax.set_xticks(x + width / 2)
+    ax.set_xticklabels(x_labels)
     ax.set_xlabel("Function compared")
     ax.set_ylabel(f"Avg +- std dev of time (s) for {num_trials} trials")
     ax.set_title(f"Pykokkos ufunc performance vs. NumPy for array size of {array_size:.2E}")
