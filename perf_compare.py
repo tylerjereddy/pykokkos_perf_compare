@@ -30,6 +30,14 @@ def run_bench(array_size: int, num_trials: int = 3):
                    "pykokkos": defaultdict(list)}
     for func_name, pk_func, np_func in tqdm([("cos", pk.cos, np.cos),
                                              ("sin", pk.sin, np.sin),
+                                             ("tan", pk.tan, np.tan),
+                                             ("log", pk.log, np.log),
+                                             ("log2", pk.log2, np.log2),
+                                             ("log10", pk.log10, np.log10),
+                                             ("log1p", pk.log1p, np.log1p),
+                                             ("exp", pk.exp, np.exp),
+                                             ("isnan", pk.isnan, np.isnan),
+                                             ("isfinite", pk.isfinite, np.isfinite),
                                             ]):
         for trial in tqdm(range(num_trials)):
             result_numpy, time_numpy_sec = run_individual_benchmark(np_func, data_np)
@@ -60,7 +68,7 @@ def plot_results(timing_data, array_size):
                height=avg_time,
                tick_label=x_labels,
                yerr=std_time,
-               capsize=20.0,
+               capsize=2.0,
                label=libname,
                width=0.1,
                )
