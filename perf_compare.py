@@ -78,7 +78,8 @@ def plot_results(timing_data, array_size):
     ax.set_xticklabels(x_labels)
     ax.set_xlabel("Function compared")
     ax.set_ylabel(f"Avg +- std dev of time (s) for {num_trials} trials")
-    ax.set_title(f"Pykokkos ufunc performance vs. NumPy for array size of {array_size:.2E}")
+    ax.set_title(f"Pykokkos unary ufunc performance vs. NumPy for 1D array size of {array_size:.2E}",
+                 fontsize=10)
     ax.legend()
     fig.savefig("pykokkos_vs_numpy_ufuncs.png",
                 dpi=300)
