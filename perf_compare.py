@@ -51,13 +51,21 @@ def run_individual_benchmark(func_obj, bench_data, include_mem_transfers: Option
     return result, elapsed_time_sec
 
 
-def run_bench(array_size: int, num_trials: int = 3):
+def run_bench(array_size: int, array_type: str, num_trials: int = 3):
     """
     Compare pykokkos vs. NumPy performance
     """
+    if array_type == "float64":
+        np_dtype = np.float64
+        pk_dtype = pk.double
+        rtol = 1e-7
+    elif array_type == "float32":
+        np_dtype = np.float32
+        pk_dtype = pk.float
+        rtol = 1e-6
     rng = np.random.default_rng(12345)
-    data_np = np.float64(rng.random(array_size))
-    view = pk.View([array_size], dtype=pk.double)
+    data_np = np_dtype(rng.random(array_size))
+    view = pk.View([array_size], dtype=pk_dtype)
     view[:] = data_np
     timing_data = {"numpy": defaultdict(list),
                    "pykokkos": defaultdict(list),
@@ -79,9 +87,9 @@ def run_bench(array_size: int, num_trials: int = 3):
             result_pykokkos, time_pykokkos_sec = run_individual_benchmark(pk_func, view)
             result_cupy, time_cupy_sec = run_individual_benchmark(cp_func, data_np, "cupy_include_transfers")
             result_cupy_no_xfer, time_cupy_sec_no_xfer = run_individual_benchmark(cp_func, data_np, "cupy_exclude_transfers")
-            assert_allclose(result_pykokkos, result_numpy)
-            assert_allclose(result_cupy, result_numpy)
-            assert_allclose(result_cupy_no_xfer, result_numpy)
+            assert_allclose(result_pykokkos, result_numpy, rtol=rtol)
+            assert_allclose(result_cupy, result_numpy, rtol=rtol)
+            assert_allclose(result_cupy_no_xfer, result_numpy, rtol=rtol)
             timing_data["numpy"][func_name].append(time_numpy_sec)
             timing_data["pykokkos"][func_name].append(time_pykokkos_sec)
             timing_data["cupy_with_transfers"][func_name].append(time_cupy_sec)
@@ -90,7 +98,7 @@ def run_bench(array_size: int, num_trials: int = 3):
     return timing_data, array_size
 
 
-def plot_results(timing_data, array_size):
+def plot_results(timing_data, array_size, array_type):
     fig, ax = plt.subplots(1, 1)
     x_labels = list(timing_data["numpy"].keys())
     width = 0.1
@@ -121,18 +129,21 @@ def plot_results(timing_data, array_size):
     ax.set_xticklabels(x_labels)
     ax.set_xlabel("Function compared")
     ax.set_ylabel(f"Avg +- std dev of time (s) for {num_trials} trials [discard 1st trial]")
-    ax.set_title((f"Pykokkos unary ufunc performance vs. NumPy/CuPy for 1D array size of {array_size:.2E}\n"
+    ax.set_title((f"Pykokkos unary ufunc performance vs. NumPy/CuPy for 1D {array_type} array size of {array_size:.2E}\n"
                   "(benchmark source: https://github.com/tylerjereddy/pykokkos_perf_compare)"
                  ),
                  fontsize=10)
     ax.legend()
-    fig.savefig("pykokkos_vs_numpy_ufuncs.png",
+    fig.savefig(f"pykokkos_vs_numpy_ufuncs_{array_type}.png",
                 dpi=300)
 
 
 if __name__ == "__main__":
     pk.set_default_space(pk.ExecutionSpace.Cuda)
-    timing_data, array_size = run_bench(array_size=int(1e7),
-                                        num_trials=4)
-    plot_results(timing_data=timing_data,
-                 array_size=array_size)
+    for array_type in ["float64", "float32"]:
+        timing_data, array_size = run_bench(array_size=int(1e7),
+                                            array_type=array_type,
+                                            num_trials=4)
+        plot_results(timing_data=timing_data,
+                     array_size=array_size,
+                     array_type=array_type)
