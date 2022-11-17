@@ -68,7 +68,7 @@ def run_bench(array_size: int, array_type: str, num_trials: int = 3):
     view = pk.View([array_size], dtype=pk_dtype)
     view[:] = data_np
     timing_data = {"numpy": defaultdict(list),
-                   "pykokkos": defaultdict(list),
+                   "pykokkos_cuda_no_uvm": defaultdict(list),
                    "cupy_with_transfers": defaultdict(list),
                    "cupy_no_transfers": defaultdict(list)}
     for func_name, pk_func, np_func, cp_func in tqdm([("cos", pk.cos, np.cos, cp.cos),
@@ -91,7 +91,7 @@ def run_bench(array_size: int, array_type: str, num_trials: int = 3):
             assert_allclose(result_cupy, result_numpy, rtol=rtol)
             assert_allclose(result_cupy_no_xfer, result_numpy, rtol=rtol)
             timing_data["numpy"][func_name].append(time_numpy_sec)
-            timing_data["pykokkos"][func_name].append(time_pykokkos_sec)
+            timing_data["pykokkos_cuda_no_uvm"][func_name].append(time_pykokkos_sec)
             timing_data["cupy_with_transfers"][func_name].append(time_cupy_sec)
             timing_data["cupy_no_transfers"][func_name].append(time_cupy_sec_no_xfer)
 
@@ -105,7 +105,7 @@ def plot_results(timing_data, array_size, array_type):
     x = np.arange(len(x_labels))
 
     for libname, offset in [("numpy", 0.0),
-                            ("pykokkos", width),
+                            ("pykokkos_cuda_no_uvm", width),
                             ("cupy_with_transfers", width * 2),
                             ("cupy_no_transfers", width * 3)]:
         avg_time = []
@@ -140,6 +140,7 @@ def plot_results(timing_data, array_size, array_type):
 
 if __name__ == "__main__":
     pk.set_default_space(pk.ExecutionSpace.Cuda)
+    assert not pk.is_uvm_enabled()
     for array_type in ["float64", "float32"]:
         timing_data, array_size = run_bench(array_size=int(1e7),
                                             array_type=array_type,
