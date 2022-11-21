@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 import time
 from collections import defaultdict
@@ -65,10 +66,11 @@ def run_bench(array_size: int, array_type: str, num_trials: int = 3):
         rtol = 1e-6
     rng = np.random.default_rng(12345)
     data_np = np_dtype(rng.random(array_size))
-    view = pk.View([array_size], dtype=pk_dtype)
-    view[:] = data_np
+    # we'll make this env variable mandatory:
+    openmp_threads = os.environ["OMP_NUM_THREADS"]
     timing_data = {"numpy": defaultdict(list),
                    "pykokkos_cuda_no_uvm": defaultdict(list),
+                   f"pykokkos_openmp_{openmp_threads}_threads": defaultdict(list),
                    "cupy_with_transfers": defaultdict(list),
                    "cupy_no_transfers": defaultdict(list)}
     for func_name, pk_func, np_func, cp_func in tqdm([("cos", pk.cos, np.cos, cp.cos),
@@ -84,14 +86,27 @@ def run_bench(array_size: int, array_type: str, num_trials: int = 3):
                                             ]):
         for trial in tqdm(range(num_trials)):
             result_numpy, time_numpy_sec = run_individual_benchmark(np_func, data_np)
+            # carefully set the views up after changing
+            # execution spaces...
+            pk.set_default_space(pk.ExecutionSpace.Cuda)
+            assert not pk.is_uvm_enabled()
+            view = pk.View([array_size], dtype=pk_dtype)
+            view[:] = data_np
             result_pykokkos, time_pykokkos_sec = run_individual_benchmark(pk_func, view)
+            pk.set_default_space(pk.ExecutionSpace.OpenMP)
+            assert not pk.is_uvm_enabled()
+            view = pk.View([array_size], dtype=pk_dtype)
+            view[:] = data_np
+            result_pykokkos_openmp, time_pykokkos_sec_openmp = run_individual_benchmark(pk_func, view)
             result_cupy, time_cupy_sec = run_individual_benchmark(cp_func, data_np, "cupy_include_transfers")
             result_cupy_no_xfer, time_cupy_sec_no_xfer = run_individual_benchmark(cp_func, data_np, "cupy_exclude_transfers")
             assert_allclose(result_pykokkos, result_numpy, rtol=rtol)
+            assert_allclose(result_pykokkos_openmp, result_numpy, rtol=rtol)
             assert_allclose(result_cupy, result_numpy, rtol=rtol)
             assert_allclose(result_cupy_no_xfer, result_numpy, rtol=rtol)
             timing_data["numpy"][func_name].append(time_numpy_sec)
             timing_data["pykokkos_cuda_no_uvm"][func_name].append(time_pykokkos_sec)
+            timing_data[f"pykokkos_openmp_{openmp_threads}_threads"][func_name].append(time_pykokkos_sec_openmp)
             timing_data["cupy_with_transfers"][func_name].append(time_cupy_sec)
             timing_data["cupy_no_transfers"][func_name].append(time_cupy_sec_no_xfer)
 
@@ -99,6 +114,7 @@ def run_bench(array_size: int, array_type: str, num_trials: int = 3):
 
 
 def plot_results(timing_data, array_size, array_type):
+    openmp_threads = os.environ["OMP_NUM_THREADS"]
     fig, ax = plt.subplots(1, 1)
     x_labels = list(timing_data["numpy"].keys())
     width = 0.1
@@ -106,8 +122,9 @@ def plot_results(timing_data, array_size, array_type):
 
     for libname, offset in [("numpy", 0.0),
                             ("pykokkos_cuda_no_uvm", width),
-                            ("cupy_with_transfers", width * 2),
-                            ("cupy_no_transfers", width * 3)]:
+                            (f"pykokkos_openmp_{openmp_threads}_threads", width * 2),
+                            ("cupy_with_transfers", width * 3),
+                            ("cupy_no_transfers", width * 4)]:
         avg_time = []
         std_time = []
         for func_name in x_labels:
@@ -140,7 +157,6 @@ def plot_results(timing_data, array_size, array_type):
 
 if __name__ == "__main__":
     pk.set_default_space(pk.ExecutionSpace.Cuda)
-    assert not pk.is_uvm_enabled()
     for array_type in ["float64", "float32"]:
         timing_data, array_size = run_bench(array_size=int(1e7),
                                             array_type=array_type,
